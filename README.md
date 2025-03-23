@@ -1,5 +1,7 @@
 # OBS Overlay Controller
 
+This script is currently in open Beta testing. It is open to anyone, but realize it is still being optimized and worked on.
+
 The OBS Overlay Controller is a simple Python script designed to detect when a template provided is visible in your game and automatically toggle an overlay in OBS. This is useful for streamers who want to prevent stream sniping by covering their in-game map(s) or other in-game screens. Disclaimer: this script, while focused on accuracy, is more largely focused on performance. This is to ensure the overlay can show as quickly as possible to cover any of the details you want it to. However, timing may not be perfect. Adjust the parameters to get maximum performance based on the load your computer can handle.
 
 ## Features
@@ -77,8 +79,9 @@ The OBS Overlay Controller is a simple Python script designed to detect when a t
    - Ensure the OBS scene names are correct in the [**config.json**](config.json) file (case sensitive; must be exact).
    - Verify the template screenshots are clear and accurately represents your in-game screens/objects you wish to detect (screenshot only the section/object that this script should detect).
    - Adjust the similarity accuracy in the [**config.json**](config.json) file (must be a tenths place decimal point between 0.0 and 1.0; where 0.0 is no accuracy and 1.0 is perfect accuracy).
-   - Adjust the times to check per second whole number in the [**config.json**](config.json) file (must be a whole number between 1 and 20).
+   - Adjust the times to check per second in the [**config.json**](config.json) file (must be a whole number between 1 and 20).
    - If the scene is taking awhile to transition, check your transition type in OBS. Adjust this to have a "cut" type, this will instantly switch rather than having a transition effect.
+   - If you are experiencing lag while running the script, ensure the similarity accuracy and times to check per second in the [**config.json**](config.json) file are the lowest they can be while still properly detecting. Also, make sure to only have the templates needed in the [**detection_templates**](detection_templates) folder (the more you have, the more processing the script has to do). Try to find one or two templates that will work and adjust the similarity accuracy variable for optimization.
 
 ## Contributing
 
