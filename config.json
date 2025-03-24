@@ -1,6 +1,6 @@
 {
-  "game_scene_without_overlay_name": "",
-  "game_scene_with_overlay_name": "",
+  "obs_overlay_source_name": "",
+  "obs_scene_name": "",
   "obs_websocket_password": "",
   "obs_websocket_port": 4455,
   "similarity_accuracy": 0.8,

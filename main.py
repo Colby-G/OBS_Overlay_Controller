@@ -9,29 +9,21 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import tkinter as tk
 
+obs_connection = None
+obs_overlay_source_id = None
+
 with open("config.json", "r") as f:
     config = json.load(f)
 
-GAME_SCENE = config.get("game_scene_without_overlay_name", "")
-TEMPLATES_PATH = "detection_templates/"
-OBS_WEBSOCKET_PORT = config.get("obs_websocket_port", 4455)
+OBS_OVERLAY_SOURCE = config.get("obs_overlay_source_name", "")
 OBS_PASSWORD = config.get("obs_websocket_password", "")
-OVERLAY_SCENE = config.get("game_scene_with_overlay_name", "")
+OBS_SCENE = config.get("obs_scene_name", "")
+OBS_WEBSOCKET_PORT = config.get("obs_websocket_port", 4455)
+TEMPLATES_PATH = "detection_templates/"
 THRESHOLD = config.get("similarity_accuracy", 0.8)
 TIMES_TO_CHECK = config.get("times_to_check_per_second", 10)
 MILLISECONDS_PER_CHECK = int(1000 / TIMES_TO_CHECK)
 executor = ThreadPoolExecutor(max_workers=len(os.listdir(TEMPLATES_PATH)))
-current_scene = None
-
-def connect_to_obs():
-    ws = obsws("localhost", int(OBS_WEBSOCKET_PORT), OBS_PASSWORD)
-    try:
-        ws.connect()
-        return ws
-    except Exception as e:
-        print(f"Failed to connect to OBS: {e}")
-        status_label.config(text="Status: Failed to connect to OBS", fg="red")
-        return None
 
 def preprocess_image(image):
     gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -39,34 +31,106 @@ def preprocess_image(image):
 
 def load_templates():
     templates_edges = []
+    valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp')
     for filename in os.listdir(TEMPLATES_PATH):
+        if not filename.lower().endswith(valid_extensions):
+            print(f"Skipping non-image file: {filename}")
+            continue
         path = os.path.join(TEMPLATES_PATH, filename)
         template = cv2.imread(path)
-        if template is not None:
+        if template is None:
+            print(f"Failed to load {filename}. Unsupported format or corrupted file.")
+        else:
             template_edges = preprocess_image(template)
             scaled_template = [
-                cv2.resize(template_edges, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
+                cv2.resize(template_edges, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
                 for scale in np.linspace(0.7, 1, 3)
             ]
             templates_edges.append(scaled_template)
     return templates_edges
 
+def connect_to_obs():
+    global obs_connection, obs_overlay_source_id
+    if obs_connection is not None:
+        return obs_connection
+    ws = obsws("localhost", int(OBS_WEBSOCKET_PORT), OBS_PASSWORD)
+    try:
+        ws.connect()
+        obs_connection = ws
+    except Exception as e:
+        print(f"Failed with '{type(e).__name__}' while trying to connect to OBS: {e}")
+        status_label.config(text=f"Status: Failed with '{type(e).__name__}' while trying to connect to OBS", fg="red")
+        obs_connection = None
+        return None
+    try:
+        ws.call(requests.SetCurrentProgramScene(sceneName=OBS_SCENE))
+    except Exception as e:
+        print(f"Failed with '{type(e).__name__}' while trying to set the {OBS_SCENE} scene: {e}")
+        status_label.config(text=f"Status: Failed with '{type(e).__name__}' while trying to set the {OBS_SCENE} scene", fg="red")
+        return None
+    try:
+        obs_overlay_source_id = ws.call(requests.GetSceneItemId(sceneName=OBS_SCENE, sourceName=OBS_OVERLAY_SOURCE)).datain.get("sceneItemId")
+    except Exception as e:
+        print(f"Failed with '{type(e).__name__}' while trying to get the {OBS_OVERLAY_SOURCE} source id: {e}")
+        status_label.config(text=f"Status: Failed with '{type(e).__name__}' while trying to get the {OBS_OVERLAY_SOURCE} source id", fg="red")
+        return None
+    try:
+        ws.call(requests.SetSceneItemEnabled(sceneName=OBS_SCENE, sceneItemId=obs_overlay_source_id, sceneItemEnabled=False))
+    except Exception as e:
+        print(f"Failed with '{type(e).__name__}' while trying to hide the {OBS_OVERLAY_SOURCE} overlay source: {e}")
+        status_label.config(text=f"Status: Failed with '{type(e).__name__}' while trying to hide the {OBS_OVERLAY_SOURCE} overlay source", fg="red")
+        return None
+    return ws
+
+def check_obs_connection():
+    global obs_connection
+    if obs_connection is None:
+        return connect_to_obs()
+    try:
+        obs_connection.call(requests.GetVersion())
+        return obs_connection
+    except Exception as e:
+        print(f"OBS connection error: {e}")
+        print("Attempting to reconnect...")
+        for attempt in range(1, 3 + 1):
+            time.sleep(5)
+            obs_connection = connect_to_obs()
+            if obs_connection:
+                print("Reconnected to OBS.")
+                return obs_connection
+            print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Retry {attempt}/3 failed.")
+        print("Failed to reconnect after multiple attempts. Check OBS and try again.")
+        return None
+
 def capture_screen():
     with mss.mss() as sct:
-        monitor = sct.monitors[1]
-        screenshot = sct.grab(monitor)
-        frame = np.array(screenshot)
-        return frame[:, :, :3]
+        try:
+            screenshot = sct.grab(sct.monitors[1])
+            frame = np.array(screenshot)
+            return frame[:, :, :3]
+        except Exception as e:
+            print(f"Error capturing screen on monitor 1: {e}")
+            return None
 
 def check_template(scaled_template, frame_edges):
     for t in scaled_template:
         res = cv2.matchTemplate(frame_edges, t, cv2.TM_CCOEFF_NORMED)
-        k = max(10, int(0.01 * res.size))
-        top_k_mean = np.mean(np.partition(res.flatten(), -k)[-k:])
-        print(f"Top-k Mean match value: {top_k_mean}") #TODO
-        if top_k_mean >= float(THRESHOLD):
+        # k = max(10, int(0.01 * res.size)) #TODO Choose to use Top-k or max value
+        # top_k_mean = np.mean(np.partition(res.flatten(), -k)[-k:]) #TODO Choose to use Top-k or max value
+        max_value = np.max(res) #TODO Choose to use Top-k or max value
+        # print(f"Top-k Mean match value: {top_k_mean}") #TODO Remove
+        # print(f"Max match value: {max_value}") #TODO Remove
+        if max_value >= float(THRESHOLD):
             return True
     return False
+
+def set_overlay_visibility(ws, visible):
+    global obs_overlay_source_id
+    try:
+        ws.call(requests.SetSceneItemEnabled(sceneName=OBS_SCENE, sceneItemId=obs_overlay_source_id, sceneItemEnabled=visible))
+    except Exception as e:
+        print(f"Failed with '{type(e).__name__}' while trying to toggle overlay visibility to {visible}: {e}")
+        status_label.config(text=f"Status: Failed with '{type(e).__name__}' while trying to toggle overlay visibility to {visible}", fg="red")
 
 def detect_templates():
     templates_edges = load_templates()
@@ -75,14 +139,11 @@ def detect_templates():
         status_label.config(text="Status: No templates found", fg="red")
         return
 
-    ws = connect_to_obs()
+    ws = check_obs_connection()
     if not ws:
         return
 
-    global current_scene
-    response = ws.call(requests.SetCurrentProgramScene(sceneName=GAME_SCENE))
-    # print(f"OBS Response: {response}") #TODO
-    current_scene = GAME_SCENE
+    is_overlay_on = False
 
     while app.running:
         start_time = time.time()
@@ -90,24 +151,23 @@ def detect_templates():
         frame_edges = preprocess_image(frame)
 
         futures = [executor.submit(check_template, scaled_template, frame_edges) for scaled_template in templates_edges]
-        is_overlay_on = current_scene == OVERLAY_SCENE
 
         for future in as_completed(futures):
             result = future.result()
             if result and not is_overlay_on:
-                response = ws.call(requests.SetCurrentProgramScene(sceneName=OVERLAY_SCENE))
-                # print(f"OBS Response: {response}") #TODO
-                current_scene = OVERLAY_SCENE
+                set_overlay_visibility(ws, True)
+                is_overlay_on = True
                 break
             elif not result and is_overlay_on:
-                response = ws.call(requests.SetCurrentProgramScene(sceneName=GAME_SCENE))
-                # print(f"OBS Response: {response}") #TODO
-                current_scene = GAME_SCENE
+                set_overlay_visibility(ws, False)
+                is_overlay_on = False
                 break
             else:
                 break
 
         elapsed_time = time.time() - start_time
+        # print(f"Overlay Status: {'On' if is_overlay_on else 'Off'}") #TODO Remove
+        # print(f"Frame processed in {elapsed_time:.2f}s") #TODO Remove
         time.sleep(max(0, (MILLISECONDS_PER_CHECK / 1000) - elapsed_time))
 
 def start_detection():
@@ -115,13 +175,13 @@ def start_detection():
         print("No OBS websocket password provided in the config.json file")
         status_label.config(text="Status: Missing OBS websocket password", fg="red")
         return
-    if GAME_SCENE == "":
-        print("No OBS game scene without overlay name provided in the config.json file")
-        status_label.config(text="Status: Missing OBS game scene without overlay name", fg="red")
+    if OBS_SCENE == "":
+        print("No OBS scene name provided in the config.json file")
+        status_label.config(text="Status: Missing OBS scene name", fg="red")
         return
-    if OVERLAY_SCENE == "":
-        print("No OBS game scene with overlay name provided in the config.json file")
-        status_label.config(text="Status: Missing OBS game scene with overlay name", fg="red")
+    if OBS_OVERLAY_SOURCE == "":
+        print("No OBS overlay source name provided in the config.json file")
+        status_label.config(text="Status: Missing OBS overlay source name", fg="red")
         return
     if not (isinstance(TIMES_TO_CHECK, int) and 1 <= TIMES_TO_CHECK <= 20):
         print("Times to check per second in the config.json file should be a whole number between 1 and 20")
@@ -141,8 +201,15 @@ def stop_detection():
     status_label.config(text="Status: Stopped", fg="grey")
 
 def on_close():
+    global obs_connection
     if app.running:
         stop_detection()
+    if obs_connection:
+        try:
+            obs_connection.disconnect()
+        except Exception as e:
+            print(f"Error while disconnecting: {e}")
+    executor.shutdown(wait=False)
     app.destroy()
 
 app = tk.Tk()

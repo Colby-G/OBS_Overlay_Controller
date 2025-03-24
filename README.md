@@ -7,7 +7,7 @@ The OBS Overlay Controller is a simple Python script designed to detect when a t
 ## Features
 
 - **Automatic Detection:** Uses OpenCV for real-time detection of your current in-game screen based on templates you provide through simple screenshots.
-- **OBS Integration:** Seamlessly switches between scenes automatically for you by using OBS WebSocket.
+- **OBS Integration:** Seamlessly switches a source on and off automatically for you by using OBS WebSocket.
 - **User-Friendly Interface:** Start and stop detection with a simple GUI.
 
 ## Requirements
@@ -46,11 +46,11 @@ The OBS Overlay Controller is a simple Python script designed to detect when a t
    - Click *Apply* (confirm you are creating your own password) and then click *Ok*.
 
 5. **Configure the Script**
-   - Edit [**config.json**](config.json) with your OBS details and OBS scene names:
+   - Edit [**config.json**](config.json) with your OBS details:
    ```json
    {
-      "game_scene_without_overlay_name": "",
-      "game_scene_with_overlay_name": "",
+      "obs_overlay_source_name": "",
+      "obs_scene_name": "",
       "obs_websocket_password": "",
       "obs_websocket_port": 4455,
       "similarity_accuracy": 0.8,
@@ -64,24 +64,23 @@ The OBS Overlay Controller is a simple Python script designed to detect when a t
 
 ## Usage
 
-   - To run the script, open a terminal or command prompt in the repository's root folder (where the **main.py** file is located) and run:
+   - To run the script, open a terminal or command prompt in the repository's root folder (where this **README.md** file is located) and run:
    ```bash
    python main.py
    ```
    - Click Start in the GUI to begin detection.
-      - The script will watch for your screenshots to appear on your desktop, then switch scenes automatically for you.
+      - The script will watch for your screenshots to appear on your desktop, then turn the overlay source on automatically for you.
    - Click Stop in the GUI to end detection.
 
 ## Troubleshooting
 
    - Ensure OBS WebSocket server is enabled and the port/password are correct in the [**config.json**](config.json) file (case sensitive; must be exact).
       - Ensure the password is one you created and it is not an OBS generated one.
-   - Ensure the OBS scene names are correct in the [**config.json**](config.json) file (case sensitive; must be exact).
+   - Ensure both the OBS overlay source name and OBS scene name are correct in the [**config.json**](config.json) file (case sensitive; must be exact).
    - Verify the template screenshots are clear and accurately represents your in-game screens/objects you wish to detect (screenshot only the section/object that this script should detect).
    - Adjust the similarity accuracy in the [**config.json**](config.json) file (must be a tenths place decimal point between 0.0 and 1.0; where 0.0 is no accuracy and 1.0 is perfect accuracy).
    - Adjust the times to check per second in the [**config.json**](config.json) file (must be a whole number between 1 and 20).
-   - If the scene is taking awhile to transition, check your transition type in OBS. Adjust this to have a "cut" type, this will instantly switch rather than having a transition effect.
-   - If you are experiencing lag while running the script, ensure the similarity accuracy and times to check per second in the [**config.json**](config.json) file are the lowest they can be while still properly detecting. Also, make sure to only have the templates needed in the [**detection_templates**](detection_templates) folder (the more you have, the more processing the script has to do). Try to find one or two templates that will work and adjust the similarity accuracy variable for optimization.
+   - If you are experiencing lag while running the script, ensure the similarity accuracy and times to check per second in the [**config.json**](config.json) file are the lowest they can be while still properly detecting at a good speed. Also, make sure to only have the templates needed in the [**detection_templates**](detection_templates) folder (the more you have, the more processing the script has to do). Try to find only one or two templates that will work and adjust the similarity accuracy variable for optimization.
 
 ## Contributing
 
