@@ -3,6 +3,5 @@
   "obs_scene_name": "",
   "obs_websocket_password": "",
   "obs_websocket_port": 4455,
-  "similarity_accuracy": 0.8,
-  "times_to_check_per_second": 5
+  "similarity_accuracy": 0.8
 }

@@ -53,8 +53,7 @@ The OBS Overlay Controller is a simple Python script designed to detect when a t
       "obs_scene_name": "",
       "obs_websocket_password": "",
       "obs_websocket_port": 4455,
-      "similarity_accuracy": 0.8,
-      "times_to_check_per_second": 5
+      "similarity_accuracy": 0.8
    }
    ```
 
@@ -78,9 +77,8 @@ The OBS Overlay Controller is a simple Python script designed to detect when a t
       - Ensure the password is one you created and it is not an OBS generated one.
    - Ensure both the OBS overlay source name and OBS scene name are correct in the [**config.json**](config.json) file (case sensitive; must be exact).
    - Verify the template screenshots are clear and accurately represents your in-game screens/objects you wish to detect (screenshot only the section/object that this script should detect).
-   - Adjust the similarity accuracy in the [**config.json**](config.json) file (must be a tenths place decimal point between 0.0 and 1.0; where 0.0 is no accuracy and 1.0 is perfect accuracy).
-   - Adjust the times to check per second in the [**config.json**](config.json) file (must be a whole number between 1 and 20).
-   - If you are experiencing lag while running the script, ensure the similarity accuracy and times to check per second in the [**config.json**](config.json) file are the lowest they can be while still properly detecting at a good speed. Also, make sure to only have the templates needed in the [**detection_templates**](detection_templates) folder (the more you have, the more processing the script has to do). Try to find only one or two templates that will work and adjust the similarity accuracy variable for optimization.
+   - Adjust the similarity accuracy in the [**config.json**](config.json) file (must be a decimal point between 0.0 and 1.0; where 0.0 is no accuracy and 1.0 is perfect accuracy).
+   - If you are experiencing lag while running the script, ensure the similarity accuracy in the [**config.json**](config.json) file is the lowest it can be while still properly detecting at a good speed. Also, make sure to only have the templates needed in the [**detection_templates**](detection_templates) folder (the more you have, the more processing the script has to do). Try to find only one or two templates that will work and adjust the similarity accuracy variable for optimization.
 
 ## Contributing
 

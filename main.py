@@ -21,9 +21,9 @@ OBS_SCENE = config.get("obs_scene_name", "")
 OBS_WEBSOCKET_PORT = config.get("obs_websocket_port", 4455)
 TEMPLATES_PATH = "detection_templates/"
 THRESHOLD = config.get("similarity_accuracy", 0.8)
-TIMES_TO_CHECK = config.get("times_to_check_per_second", 10)
-MILLISECONDS_PER_CHECK = int(1000 / TIMES_TO_CHECK)
-executor = ThreadPoolExecutor(max_workers=len(os.listdir(TEMPLATES_PATH)))
+valid_extensions = (".png", ".jpg", ".jpeg", ".bmp")
+template_files = [f for f in os.listdir(TEMPLATES_PATH) if f.lower().endswith(valid_extensions)]
+executor = ThreadPoolExecutor(max_workers=min((len(template_files)) * 2, 4))
 
 def preprocess_image(image):
     gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -31,11 +31,7 @@ def preprocess_image(image):
 
 def load_templates():
     templates_edges = []
-    valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp')
-    for filename in os.listdir(TEMPLATES_PATH):
-        if not filename.lower().endswith(valid_extensions):
-            print(f"Skipping non-image file: {filename}")
-            continue
+    for filename in template_files:
         path = os.path.join(TEMPLATES_PATH, filename)
         template = cv2.imread(path)
         if template is None:
@@ -44,7 +40,7 @@ def load_templates():
             template_edges = preprocess_image(template)
             scaled_template = [
                 cv2.resize(template_edges, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-                for scale in np.linspace(0.7, 1, 3)
+                for scale in np.linspace(0.6, 1, 3)
             ]
             templates_edges.append(scaled_template)
     return templates_edges
@@ -115,10 +111,7 @@ def capture_screen():
 def check_template(scaled_template, frame_edges):
     for t in scaled_template:
         res = cv2.matchTemplate(frame_edges, t, cv2.TM_CCOEFF_NORMED)
-        # k = max(10, int(0.01 * res.size)) #TODO Choose to use Top-k or max value
-        # top_k_mean = np.mean(np.partition(res.flatten(), -k)[-k:]) #TODO Choose to use Top-k or max value
-        max_value = np.max(res) #TODO Choose to use Top-k or max value
-        # print(f"Top-k Mean match value: {top_k_mean}") #TODO Remove
+        max_value = np.max(res)
         # print(f"Max match value: {max_value}") #TODO Remove
         if max_value >= float(THRESHOLD):
             return True
@@ -146,7 +139,7 @@ def detect_templates():
     is_overlay_on = False
 
     while app.running:
-        start_time = time.time()
+        is_match_found = False
         frame = capture_screen()
         frame_edges = preprocess_image(frame)
 
@@ -154,21 +147,19 @@ def detect_templates():
 
         for future in as_completed(futures):
             result = future.result()
-            if result and not is_overlay_on:
-                set_overlay_visibility(ws, True)
-                is_overlay_on = True
-                break
-            elif not result and is_overlay_on:
-                set_overlay_visibility(ws, False)
-                is_overlay_on = False
-                break
-            else:
+            if result:
+                is_match_found = True
+                for f in futures:
+                    if not f.done():
+                        f.cancel()
                 break
 
-        elapsed_time = time.time() - start_time
-        # print(f"Overlay Status: {'On' if is_overlay_on else 'Off'}") #TODO Remove
-        # print(f"Frame processed in {elapsed_time:.2f}s") #TODO Remove
-        time.sleep(max(0, (MILLISECONDS_PER_CHECK / 1000) - elapsed_time))
+        if is_match_found and not is_overlay_on:
+            set_overlay_visibility(ws, True)
+            is_overlay_on = True
+        elif not is_match_found and is_overlay_on:
+            set_overlay_visibility(ws, False)
+            is_overlay_on = False
 
 def start_detection():
     if OBS_PASSWORD == "":
@@ -183,12 +174,8 @@ def start_detection():
         print("No OBS overlay source name provided in the config.json file")
         status_label.config(text="Status: Missing OBS overlay source name", fg="red")
         return
-    if not (isinstance(TIMES_TO_CHECK, int) and 1 <= TIMES_TO_CHECK <= 20):
-        print("Times to check per second in the config.json file should be a whole number between 1 and 20")
-        status_label.config(text="Status: Invalid times to check per second", fg="red")
-        return
-    if not (isinstance(THRESHOLD, float) and 0.0 <= THRESHOLD <= 1.0 and round(THRESHOLD, 1) == THRESHOLD):
-        print("Similarity accuracy in the config.json file should be a tenths place decimal point between 0.0 and 1.0")
+    if not (isinstance(THRESHOLD, float) and 0.0 <= THRESHOLD <= 1.0):
+        print("Similarity accuracy in the config.json file should be a decimal point between 0.0 and 1.0")
         status_label.config(text="Status: Invalid similarity accuracy", fg="red")
         return
     if not app.running:
