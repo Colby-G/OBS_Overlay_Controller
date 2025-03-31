@@ -1,7 +1,11 @@
 {
+  "highest_scale_of_templates": 1.0,
+  "lowest_scale_of_templates": 0.6,
+  "number_of_scaled_templates": 3,
   "obs_overlay_source_name": "",
   "obs_scene_name": "",
   "obs_websocket_password": "",
   "obs_websocket_port": 4455,
+  "screenshot_delay": 0.05,
   "similarity_accuracy": 0.8
 }

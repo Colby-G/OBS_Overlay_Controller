@@ -15,15 +15,20 @@ obs_overlay_source_id = None
 with open("config.json", "r") as f:
     config = json.load(f)
 
+HIGH_SCALE = config.get("highest_scale_of_templates", 1.0)
+LOW_SCALE = config.get("lowest_scale_of_templates", 0.5)
+NUMBER_OF_SCALES = config.get("number_of_scaled_templates", 3)
 OBS_OVERLAY_SOURCE = config.get("obs_overlay_source_name", "")
 OBS_PASSWORD = config.get("obs_websocket_password", "")
 OBS_SCENE = config.get("obs_scene_name", "")
 OBS_WEBSOCKET_PORT = config.get("obs_websocket_port", 4455)
+SCREENSHOT_DELAY = config.get("screenshot_delay", 0.05)
 TEMPLATES_PATH = "detection_templates/"
 THRESHOLD = config.get("similarity_accuracy", 0.8)
 valid_extensions = (".png", ".jpg", ".jpeg", ".bmp")
 template_files = [f for f in os.listdir(TEMPLATES_PATH) if f.lower().endswith(valid_extensions)]
-executor = ThreadPoolExecutor(max_workers=min((len(template_files)) * 2, 4))
+cpu_count = os.cpu_count() or 4
+executor = ThreadPoolExecutor(max_workers=min(len(template_files) * 2, cpu_count * 2))
 
 def preprocess_image(image):
     gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -40,7 +45,7 @@ def load_templates():
             template_edges = preprocess_image(template)
             scaled_template = [
                 cv2.resize(template_edges, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-                for scale in np.linspace(0.6, 1, 3)
+                for scale in np.linspace(LOW_SCALE, HIGH_SCALE, NUMBER_OF_SCALES)
             ]
             templates_edges.append(scaled_template)
     return templates_edges
@@ -146,12 +151,8 @@ def detect_templates():
         futures = [executor.submit(check_template, scaled_template, frame_edges) for scaled_template in templates_edges]
 
         for future in as_completed(futures):
-            result = future.result()
-            if result:
+            if future.result():
                 is_match_found = True
-                for f in futures:
-                    if not f.done():
-                        f.cancel()
                 break
 
         if is_match_found and not is_overlay_on:
@@ -160,6 +161,12 @@ def detect_templates():
         elif not is_match_found and is_overlay_on:
             set_overlay_visibility(ws, False)
             is_overlay_on = False
+        
+        for future in futures:
+            if not future.done():
+                future.cancel()
+
+        time.sleep(SCREENSHOT_DELAY)
 
 def start_detection():
     if OBS_PASSWORD == "":
@@ -174,9 +181,25 @@ def start_detection():
         print("No OBS overlay source name provided in the config.json file")
         status_label.config(text="Status: Missing OBS overlay source name", fg="red")
         return
+    if not (isinstance(SCREENSHOT_DELAY, float) and 0.0 <= SCREENSHOT_DELAY):
+        print("Screenshot delay in the config.json file should be a decimal point greater than or equal to 0.0")
+        status_label.config(text="Status: Invalid screenshot delay", fg="red")
+        return
     if not (isinstance(THRESHOLD, float) and 0.0 <= THRESHOLD <= 1.0):
         print("Similarity accuracy in the config.json file should be a decimal point between 0.0 and 1.0")
         status_label.config(text="Status: Invalid similarity accuracy", fg="red")
+        return
+    if not (isinstance(LOW_SCALE, float) and 0.0 < LOW_SCALE <= 1.0 and LOW_SCALE <= HIGH_SCALE):
+        print("Lowest scale of templates in the config.json file should be a decimal point between 0.0 and 1.0")
+        status_label.config(text="Status: Invalid lowest scale of templates", fg="red")
+        return
+    if not (isinstance(HIGH_SCALE, float) and 0.0 < HIGH_SCALE <= 1.0 and HIGH_SCALE >= LOW_SCALE):
+        print("Highest scale of templates in the config.json file should be a decimal point between 0.0 and 1.0")
+        status_label.config(text="Status: Invalid highest scale of templates", fg="red")
+        return
+    if not (isinstance(NUMBER_OF_SCALES, int) and 0 < NUMBER_OF_SCALES):
+        print("Number of scaled templates in the config.json file should be an integer greater than 0")
+        status_label.config(text="Status: Invalid number of scaled templates", fg="red")
         return
     if not app.running:
         app.running = True
