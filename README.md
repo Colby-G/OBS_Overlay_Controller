@@ -1,7 +1,9 @@
 # OBS Overlay Controller
 
 **Note:** This script is currently in open Beta testing. It is available for anyone to try, but please note that it is still being optimized and refined.
+
 The OBS Overlay Controller is a lightweight Python script designed to detect when a specific in-game screen or object is visible and automatically toggle an overlay in OBS. This is particularly useful for streamers who want to prevent stream sniping by covering in-game maps or sensitive screens.
+
 **Disclaimer:** While the script prioritizes accuracy, its main focus is on performance to ensure the overlay appears as quickly as possible. Adjust the parameters for optimal results based on your computer's performance.
 
 ## Features
